@@ -6,7 +6,7 @@ This project analyzes the association between food security status and diabetes 
 
 ## Code Description
 The R Markdown document (ADA_Final) includes several sections of R code which perform the following functions:
--Data Import and Installation: Installs necessary packages and imports data from SAS format files into R using the haven package.
+-**Data Import and Installation: Installs necessary packages and imports data from SAS format files into R using the haven package.
 -Data Merging and Cleaning: Combines multiple datasets and filters out incomplete entries to ensure a robust analysis.
 -Descriptive Statistics: Generates descriptive statistics and visualizations to understand the data distribution.
 -Advanced Data Analysis: Conducts logistic regression to explore associations between food security and diabetes, using likelihood ratio test to test if confounding factors will affect model fit. It also performs chi-square tests for categorical comparisons and t-test for continuous variables, and calculates weighted averages using survey methods.
