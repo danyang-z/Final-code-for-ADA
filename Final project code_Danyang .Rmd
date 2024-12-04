@@ -1,0 +1,442 @@
+---
+title: "ADA_Final"
+output: html_document
+date: "2024-12-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+# Read SAS document into R 
+```{r}
+install.packages("haven")
+library(haven)
+Demo_data <- read_xpt("C:\\Users\\danya\\Box\\FL2024\\ADA\\Final paper\\P_DEMO.XPT")
+Diabete_data <- read_xpt("C:\\Users\\danya\\Box\\FL2024\\ADA\\Final paper\\P_DIQ.XPT")
+Food_secure_data <- read_xpt("C:\\Users\\danya\\Box\\FL2024\\ADA\\Final paper\\P_FSQ.XPT")
+BMI_data <- read_xpt("C:\\Users\\danya\\Box\\FL2024\\ADA\\Final paper\\P_BMX.XPT")
+```
+```{r}
+install.packages("dplyr")
+
+library(dplyr)
+combined_data <- Demo_data %>%
+  left_join(Diabete_data, by = "SEQN") %>%
+  left_join(Food_secure_data, by = "SEQN") %>%
+  left_join(BMI_data, by = "SEQN")
+write.csv(combined_data, "C:\\Users\\danya\\Box\\FL2024\\ADA\\Final paper\\Combined_Data.csv", row.names = FALSE)
+
+```
+#clean data
+```{r}
+cleaned_data <- combined_data %>%
+  drop_na(FSDAD, DIQ010, RIDAGEYR) %>%  
+  filter(DIQ010 != 7, DIQ010 != 9, RIDAGEYR >= 18)  
+write.csv(cleaned_data, "C:\\Users\\danya\\Box\\FL2024\\ADA\\Final paper\\Filtered_Combined_Data.csv", row.names = FALSE)
+```
+
+#Figure 1
+```{r, eval=FALSE}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse,   # Collection of data manipulation and visualization packages
+               readr,       # For reading in CSV files
+               table1,      # For creating descriptive tables
+               DiagrammeR,  # For generating flowchart (Figure 1)
+               rsvg)        # For exporting SVG graphics
+
+```
+```{r}
+# of rows showing the original data set
+nrow(combined_data)
+```
+
+## Drop observations with missing data on FSDAD- Adult food security category
+```{r}
+ex1 <- combined_data %>%
+  drop_na(FSDAD)
+```
+## Drop observations with missing data on DIQ010-Doctor told you have diabetes
+```{r}
+ex2 <- ex1 %>%
+  drop_na(DIQ010) %>% 
+  filter(DIQ010 != 7, DIQ010 != 9)  
+```
+## Drop observations with age less that 18 RIDAGEYR - Age in years at screening
+```{r}
+ex3 <- ex2 %>%
+  drop_na(RIDAGEYR) %>% 
+  filter(RIDAGEYR >= 18)   
+```
+
+```{r}
+nrow(ex1)  
+nrow(ex2)  
+nrow(ex3)
+```
+```{r}
+grViz(diagram = "digraph flowchart{
+      node [fontname = Helvetica, shape = rectangle, fontsize=15] 
+      
+      node1 [label = '@@1'] # starting number
+      node2 [label = '@@2'] # number after exclusion 1
+      node3 [label = '@@3'] # number after exclusion 2
+      node4 [label = '@@4'] # number after exclusion 3
+      
+      node1 -> node2 -> node3 -> node4 
+}
+      [1]: 'Starting number of records from NHANES 2017-March 2020 Combined Data n = 15560'
+      [2]: 'Excluding 1084 individuals with missing data on the Adult food security category n = 14476'
+      [3]: 'Excluding 553 individuals with missing data and people who answer refused and do not know on diabete status n = 13923'
+      [4]: 'Excluding 4966 individuals with missing data and people whose age less than 18 on the Age in years at screening n = 8957'
+      ")
+```
+#table 1
+## food security status
+```{r}
+library(dplyr)
+
+df <- read.csv("C:\\Users\\danya\\Box\\FL2024\\ADA\\Final paper\\Filtered_Combined_Data.csv")
+
+# Use mutate to create a new food_security_status variable
+df <- df %>%
+  mutate(
+    food_security_status = case_when(
+      FSDAD %in% c(1, 2) ~ "food secure",   
+      FSDAD %in% c(3, 4) ~ "food insecure",
+      TRUE ~ NA_character_                    
+    )
+  )
+
+table(df$food_security_status, useNA = "ifany")
+```
+##diabete status
+```{r}
+df <- df %>%
+  mutate(
+    diabete_status = case_when(
+      DIQ010 %in% c(1) ~ "Yes",   
+      DIQ010 %in% c(2,3) ~ "No",
+      TRUE ~ NA_character_                    
+    )
+  )
+table(df$diabete_status, useNA = "ifany")
+```
+```{r}
+cross_tab <- table(df$food_security_status, df$diabete_status)
+cross_tab
+
+```
+```{r}
+install.packages("survey")
+library(survey)
+svy_design <- svydesign(ids = ~1, data = df, weights = ~WTMECPRP)
+# Calculate the weighted number of food safety status
+weighted_diabete_status <- svytable(~diabete_status, svy_design)
+
+print(weighted_diabete_status)
+```
+##Diabete & age, bmi, PIR (continous variable)
+```{r}
+# Calculate weighted mean and se
+result_age <- svyby(~RIDAGEYR, ~food_security_status, svy_design, svymean, na.rm = TRUE)
+result_bmi <- svyby(~BMXBMI, ~food_security_status, svy_design, svymean, na.rm = TRUE)
+result_PIR <- svyby(~INDFMPIR, ~food_security_status, svy_design, svymean, na.rm = TRUE)
+
+print(result_age)
+print(result_bmi)
+print(result_PIR)
+```
+###t-test
+```{r}
+# T-test for Age (RIDAGEYR) between food security and food insecurity groups
+age_ttest <- svyttest(RIDAGEYR ~ food_security_status, svy_design, na.rm = TRUE)
+
+# T-test for BMI (BMXBMI) between food security and food insecurity groups
+bmi_ttest <- svyttest(BMXBMI ~ food_security_status, svy_design, na.rm = TRUE)
+
+# T-test for PIR (INDFMPIR) between food security and food insecurity groups
+pir_ttest <- svyttest(INDFMPIR ~ food_security_status, svy_design, na.rm = TRUE)
+
+# Print results
+print(age_ttest)
+print(bmi_ttest)
+print(pir_ttest)
+```
+###Calculate overall weighted average and standard error
+```{r}
+result_age_overall <- svymean(~RIDAGEYR, svy_design, na.rm = TRUE)
+result_bmi_overall <- svymean(~BMXBMI, svy_design, na.rm = TRUE)
+result_PIR_overall <- svymean(~INDFMPIR, svy_design, na.rm = TRUE)
+
+# Print results
+print(result_age_overall)
+print(result_bmi_overall)
+print(result_PIR_overall)
+
+```
+
+## Diabete & race (categorized variable)
+# 1	Mexican American
+# 2	Other Hispanic
+# 3	Non-Hispanic White
+# 4	Non-Hispanic Black
+# 5	Other Race - Including Multi-Racial	
+```{r}
+# Calculate weighted frequency table
+weighted_table <- svytable(~factor(RIDRETH1) + food_security_status, design = svy_design)
+
+# Calculate the weighted percentage
+weighted_percent <- prop.table(weighted_table, margin = 2) * 100
+
+print(weighted_percent)
+# Calculate the proportion and standard error of each ethnic category in different food security status
+results_se <- svyby(~factor(RIDRETH1), ~food_security_status, svy_design, svymean, 
+                    na.rm = TRUE, vartype="se")
+
+print(results_se)
+```
+### chi-square test
+```{r}
+race_chisq <- svychisq(~RIDRETH1 + food_security_status, svy_design)
+print(race_chisq)
+```
+### Calculate overall weighted frequency tables
+```{r}
+overall_weighted_table <- svytable(~factor(RIDRETH1), design = svy_design)
+# Calculate overall weighted percentage
+overall_weighted_percent <- prop.table(overall_weighted_table) * 100
+
+print(overall_weighted_percent)
+# Direct calculation of weighted means and standard errors for overall ethnic categorization
+overall_mean_se <- svymean(~factor(RIDRETH1), svy_design, na.rm = TRUE, vartype="se")
+
+print(overall_mean_se)
+```
+
+## Diabete & gender
+# 1	Male
+# 2	Female
+```{r}
+# Weighted frequency table
+weighted_table_gender <- svytable(~factor(RIAGENDR) + food_security_status, design = svy_design)
+
+# Calculate the weighted percentage for each food safety status
+weighted_percent_gender <- prop.table(weighted_table_gender, margin = 2) * 100  # margin=2 Indicates grouping and normalization by food safety status
+
+print(weighted_percent_gender)
+# Calculate the proportion and standard error of each gender category under different food security conditions
+results_se_gender <- svyby(~factor(RIAGENDR), ~food_security_status, svy_design, svymean, 
+                    na.rm = TRUE, vartype="se")
+
+print(results_se_gender)
+```
+### chi-square test
+```{r}
+gender_chisq <- svychisq(~RIAGENDR + food_security_status, svy_design)
+print(gender_chisq)
+```
+### Calculate overall weighted frequency tables
+```{r}
+overall_weighted_table_gender <- svytable(~factor(RIAGENDR), design = svy_design)
+
+# Calculate overall weighted percentage
+overall_weighted_percent_gender <- prop.table(overall_weighted_table_gender) * 100
+
+print(overall_weighted_percent_gender)
+# Calculate overall proportions and standard errors for each gender category
+overall_results_se_gender <- svyby(~factor(RIAGENDR), ~factor(1), svy_design, svymean,
+                                   na.rm = TRUE, vartype="se")
+
+print(overall_results_se_gender)
+
+```
+
+## food security & educational level(Education Level - Adults 20+)
+# 1	Less Than 9th Grade	
+# 2	9-11th Grade (Includes 12th grade with no diploma)	
+# 3	High School Grad/GED or Equivalent
+# 4	Some College or AA degree	
+# 5	College Graduate or above
+# 7	Refused
+# 9	Don't Know 
+```{r}
+# Weighted frequency table including all DMDEDUC2 values
+weighted_table_education <- svytable(~factor(DMDEDUC2) + food_security_status, design = svy_design)
+
+# Calculate the weighted percentage for each food_security_status
+weighted_percent_education <- prop.table(weighted_table_education, margin = 2) * 100
+
+# Print weighted percentages
+print(weighted_percent_education)
+
+# Calculate the proportion and standard error for each education level for each food_security_status
+results_se_education <- svyby(
+  ~factor(DMDEDUC2),
+  ~food_security_status,
+  svy_design,  
+  svymean, 
+  vartype = "se" 
+)
+
+# Print results
+print(results_se_education)
+```
+### chi-square test
+```{r}
+education_chisq <- svychisq(~DMDEDUC2 + food_security_status, svy_design)
+print(education_chisq)
+```
+### Calculate the overall weighted frequency table
+```{r}
+overall_weighted_table_education <- svytable(~factor(DMDEDUC2), design = svy_design)
+# Calculate overall weighted percentage
+overall_weighted_percent_education <- prop.table(overall_weighted_table_education) * 100
+print(overall_weighted_percent_education)
+# Calculate overall rates and standard errors for each education level category
+overall_results_se_education <- svyby(
+  ~factor(DMDEDUC2),
+  ~factor(1),
+  svy_design,  
+  svymean, 
+  vartype = "se" 
+)
+
+print(overall_results_se_education)
+
+```
+
+# logistic regression
+```{r}
+# Recode food_security_status
+df$food_security_status_numeric <- ifelse(df$food_security_status == "food secure", 1, 0)
+
+# Recode diabete_status
+df$diabete_status_numeric <- ifelse(df$diabete_status == "Yes", 1, 0)
+
+# Make sure these new variables are of integer type
+df$food_security_status_numeric <- as.integer(df$food_security_status_numeric)
+df$diabete_status_numeric <- as.integer(df$diabete_status_numeric)
+```
+
+```{r}
+# Update the survey design 
+svy_design <- svydesign(ids = ~1, data = df, weights = ~WTMECPRP)
+```
+
+```{r}
+# run logistic regression model
+library(survey)
+model_svy <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2, design = svy_design, family = binomial)
+summary(model_svy)
+
+```
+## Table of OR, CI 
+```{r}
+# Calculate Odds Ratio
+or <- exp(coef(model_svy))
+
+# Standard error of the acquisition factor
+se_coef <- summary(model_svy)$coefficients[, "Std. Error"]
+
+# Calculate 95% confidence intervals
+ci_lower <- exp(coef(model_svy) - 1.96 * se_coef)
+ci_upper <- exp(coef(model_svy) + 1.96 * se_coef)
+
+# print results
+or_ci <- data.frame(
+  OddsRatio = or,
+  CI_lower = ci_lower,
+  CI_upper = ci_upper
+)
+or_ci
+
+```
+#likelihood ratio test 
+```{r}
+library(survey)
+
+# define full model
+full_model <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2, 
+                     design = svy_design, 
+                     family = binomial)
+```
+# move out DMDEDUC2(education level)
+# p= 3.6359e-05;A significant p-value indicates that the presence of the variable is important to the model and should not be removed.
+```{r}
+reduced_model_1 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR + RIDRETH1 + RIAGENDR, 
+                          design = svy_design, 
+                          family = binomial)
+
+# Conduct likelihood ratio tests
+lrt_1 <- anova(full_model, reduced_model_1, test = "Chisq")
+print(lrt_1)
+
+```
+# move out RIAGENDR(gender)
+# p= 0.00011775 ;A significant p-value indicates that the presence of the variable is important to the model and should not be removed.
+```{r}
+# Remove another variable
+reduced_model_2 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR +  RIDRETH1 + DMDEDUC2, 
+                          design = svy_design, 
+                          family = binomial)
+
+# Conduct likelihood ratio tests
+lrt_2 <- anova(full_model, reduced_model_2, test = "Chisq")
+print(lrt_2)
+```
+# move out RIDRETH1 (race)
+# p= 0.65576; P is not significant and should be removed
+```{r}
+reduced_model_3 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR + RIAGENDR + DMDEDUC2, 
+                          design = svy_design, 
+                          family = binomial)
+
+# Conduct likelihood ratio tests
+lrt_3 <- anova(full_model, reduced_model_3, test = "Chisq")
+print(lrt_3)
+```
+# move out INDFMPIR
+# p= 0.25595; P is not significant and should be removed
+```{r}
+reduced_model_4 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR +  RIDRETH1 + RIAGENDR + DMDEDUC2,
+                          design = svy_design, 
+                          family = binomial)
+
+# Conduct likelihood ratio tests
+lrt_4 <- anova(full_model, reduced_model_4, test = "Chisq")
+print(lrt_4)
+
+```
+# move out age
+# p=< 2.22e-16;A significant p-value indicates that the presence of the variable is important to the model and should not be removed.
+```{r}
+reduced_model_5 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2,
+                          design = svy_design, 
+                          family = binomial)
+
+lrt_5 <- anova(full_model, reduced_model_5, test = "Chisq")
+print(lrt_5)
+ 
+```
+
