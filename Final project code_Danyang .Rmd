@@ -102,13 +102,15 @@ grViz(diagram = "digraph flowchart{
       node2 [label = '@@2'] # number after exclusion 1
       node3 [label = '@@3'] # number after exclusion 2
       node4 [label = '@@4'] # number after exclusion 3
+      node5 [label = '@@5'] # number after exclusion 4
       
-      node1 -> node2 -> node3 -> node4 
+      node1 -> node2 -> node3 -> node4 -> node5
 }
       [1]: 'Starting number of records from NHANES 2017-March 2020 Combined Data n = 15560'
       [2]: 'Excluding 1084 individuals with missing data on the Adult food security category n = 14476'
       [3]: 'Excluding 553 individuals with missing data and people who answer refused and do not know on diabete status n = 13923'
       [4]: 'Excluding 4966 individuals with missing data and people whose age less than 18 on the Age in years at screening n = 8957'
+      [5]: 'Eligible participants n = 8957'
       ")
 ```
 #table 1
@@ -337,6 +339,8 @@ df$diabete_status_numeric <- ifelse(df$diabete_status == "Yes", 1, 0)
 # Make sure these new variables are of integer type
 df$food_security_status_numeric <- as.integer(df$food_security_status_numeric)
 df$diabete_status_numeric <- as.integer(df$diabete_status_numeric)
+table(df$food_security_status, df$food_security_status_numeric)
+table(df$diabete_status, df$diabete_status_numeric)
 ```
 
 ```{r}
@@ -347,10 +351,11 @@ svy_design <- svydesign(ids = ~1, data = df, weights = ~WTMECPRP)
 ```{r}
 # run logistic regression model
 library(survey)
-model_svy <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2, design = svy_design, family = binomial)
+model_svy <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + BMXBMI + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2, design = svy_design, family = binomial)
 summary(model_svy)
 
 ```
+
 ## Table of OR, CI 
 ```{r}
 # Calculate Odds Ratio
@@ -372,19 +377,20 @@ or_ci <- data.frame(
 or_ci
 
 ```
+
 #likelihood ratio test 
 ```{r}
 library(survey)
 
 # define full model
-full_model <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2, 
+full_model <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + BMXBMI + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2, 
                      design = svy_design, 
                      family = binomial)
 ```
 # move out DMDEDUC2(education level)
 # p= 3.6359e-05;A significant p-value indicates that the presence of the variable is important to the model and should not be removed.
 ```{r}
-reduced_model_1 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR + RIDRETH1 + RIAGENDR, 
+reduced_model_1 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + BMXBMI + INDFMPIR + RIDRETH1 + RIAGENDR, 
                           design = svy_design, 
                           family = binomial)
 
@@ -397,7 +403,7 @@ print(lrt_1)
 # p= 0.00011775 ;A significant p-value indicates that the presence of the variable is important to the model and should not be removed.
 ```{r}
 # Remove another variable
-reduced_model_2 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR +  RIDRETH1 + DMDEDUC2, 
+reduced_model_2 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + BMXBMI + INDFMPIR +  RIDRETH1 + DMDEDUC2, 
                           design = svy_design, 
                           family = binomial)
 
@@ -408,7 +414,7 @@ print(lrt_2)
 # move out RIDRETH1 (race)
 # p= 0.65576; P is not significant and should be removed
 ```{r}
-reduced_model_3 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + INDFMPIR + RIAGENDR + DMDEDUC2, 
+reduced_model_3 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR + BMXBMI + INDFMPIR + RIAGENDR + DMDEDUC2, 
                           design = svy_design, 
                           family = binomial)
 
@@ -419,7 +425,7 @@ print(lrt_3)
 # move out INDFMPIR
 # p= 0.25595; P is not significant and should be removed
 ```{r}
-reduced_model_4 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR +  RIDRETH1 + RIAGENDR + DMDEDUC2,
+reduced_model_4 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR +  BMXBMI + RIDRETH1 + RIAGENDR + DMDEDUC2,
                           design = svy_design, 
                           family = binomial)
 
@@ -431,7 +437,7 @@ print(lrt_4)
 # move out age
 # p=< 2.22e-16;A significant p-value indicates that the presence of the variable is important to the model and should not be removed.
 ```{r}
-reduced_model_5 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2,
+reduced_model_5 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + BMXBMI + INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2,
                           design = svy_design, 
                           family = binomial)
 
@@ -439,4 +445,19 @@ lrt_5 <- anova(full_model, reduced_model_5, test = "Chisq")
 print(lrt_5)
  
 ```
+# move out BMXBMI
+# p= < 2.22e-16; A significant p-value indicates that the presence of the variable is important to the model and should not be removed.
+```{r}
+reduced_model_6 <- svyglm(diabete_status_numeric ~ food_security_status_numeric + RIDAGEYR +  INDFMPIR + RIDRETH1 + RIAGENDR + DMDEDUC2,
+                          design = svy_design, 
+                          family = binomial)
 
+# Conduct likelihood ratio tests
+lrt_6 <- anova(full_model, reduced_model_6, test = "Chisq")
+print(lrt_6)
+ 
+```
+# Cook's distance
+```{r}
+plot(model_svy, which=4, id.n=5, col="red") 
+```
